@@ -33,20 +33,32 @@ export interface EmailJob {
   successCount: number;
   failedCount: number;
   createdAt: string;
+  updatedAt: string;
   completedAt?: string;
   metadata?: Record<string, string>;
+}
+
+export interface EmailTarget {
+  id: string;
+  email: string;
+  status: 'pending' | 'sent' | 'failed' | 'blocked';
+  providerId?: string;
+  sentAt?: string;
+  failureReason?: string;
+  retryCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EmailProvider {
   id: string;
   name: string;
-  status: 'online' | 'offline' | 'error';
-  enabled: boolean;
-  quotaUsed: number;
-  quotaTotal: number;
-  emailsSentToday: number;
-  successRate: number;
-  lastActivity: string;
+  type: 'brevo' | 'mailerlite';
+  dailyQuota: number;
+  usedToday: number;
+  remainingToday: number;
+  isActive: boolean;
+  lastResetDate: string;
 }
 
 export interface SubmitEmailRequest {

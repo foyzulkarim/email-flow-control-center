@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiService } from "@/services/api";
+import { SubmitEmailRequest } from "@/types/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +26,12 @@ export default function SubmitJob() {
   const { toast } = useToast();
 
   const submitMutation = useMutation({
-    mutationFn: apiService.submitEmailJob,
+    mutationFn: (data: SubmitEmailRequest) => {
+      console.log('Submitting email job:', data);
+      return apiService.submitEmailJob(data);
+    },
     onSuccess: (data) => {
+      console.log('Job submitted successfully:', data);
       toast({
         title: "Job Submitted Successfully",
         description: `Job ID: ${data.jobId}. Your email job has been queued for processing.`,
@@ -39,6 +44,7 @@ export default function SubmitJob() {
       setMetadata([]);
     },
     onError: (error) => {
+      console.error('Job submission failed:', error);
       toast({
         title: "Submission Failed",
         description: error.message,
@@ -102,7 +108,11 @@ export default function SubmitJob() {
   };
 
   const handleSubmit = () => {
-    if (!isFormValid()) return;
+    console.log('handleSubmit called');
+    if (!isFormValid()) {
+      console.log('Form is not valid');
+      return;
+    }
 
     const allRecipients = getAllRecipients();
     const metadataObj = metadata.reduce((acc, item) => {
@@ -112,12 +122,15 @@ export default function SubmitJob() {
       return acc;
     }, {} as Record<string, string>);
 
-    submitMutation.mutate({
+    const submitData = {
       subject: subject.trim(),
       body: body.trim(),
       recipients: allRecipients,
       metadata: Object.keys(metadataObj).length > 0 ? metadataObj : undefined,
-    });
+    };
+
+    console.log('Submitting data:', submitData);
+    submitMutation.mutate(submitData);
   };
 
   const allRecipients = getAllRecipients();

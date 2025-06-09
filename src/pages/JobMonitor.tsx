@@ -1,5 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiService } from "@/services/api";
+import { EmailJob, EmailTarget } from "@/types/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,60 +26,29 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, RefreshCw, Eye } from "lucide-react";
 
-// Mock data
-const mockJobs = [
-  {
-    id: "job_abc123def456",
-    subject: "Weekly Newsletter - Tech Updates",
-    status: "completed" as const,
-    recipientCount: 1523,
-    processedCount: 1523,
-    successCount: 1510,
-    failedCount: 13,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    completedAt: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
-    metadata: { campaign: "newsletter", segment: "tech" },
-  },
-  {
-    id: "job_xyz789ghi012",
-    subject: "Product Launch Announcement",
-    status: "processing" as const,
-    recipientCount: 892,
-    processedCount: 654,
-    successCount: 642,
-    failedCount: 12,
-    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    metadata: { campaign: "product_launch", priority: "high" },
-  },
-  {
-    id: "job_mno345pqr678",
-    subject: "Monthly Report - Q1 2024",
-    status: "pending" as const,
-    recipientCount: 245,
-    processedCount: 0,
-    successCount: 0,
-    failedCount: 0,
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    metadata: { campaign: "reports", department: "finance" },
-  },
-  {
-    id: "job_def456ghi789",
-    subject: "Security Alert - Password Reset",
-    status: "failed" as const,
-    recipientCount: 156,
-    processedCount: 156,
-    successCount: 0,
-    failedCount: 156,
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    completedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    metadata: { campaign: "security", urgent: "true" },
-  },
-];
-
 export default function JobMonitor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedJob, setSelectedJob] = useState<typeof mockJobs[0] | null>(null);
+  const [selectedJob, setSelectedJob] = useState<EmailJob | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  // Fetch jobs from API
+  const { data: jobsData, isLoading, error, refetch } = useQuery({
+    queryKey: ['jobs', page, statusFilter],
+    queryFn: () => apiService.getEmailJobs(page, limit, statusFilter === 'all' ? undefined : statusFilter),
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+  });
+
+  const jobs = jobsData?.jobs || [];
+  const totalJobs = jobsData?.total || 0;
+
+  // Fetch job targets when a job is selected
+  const { data: jobTargets, isLoading: targetsLoading } = useQuery({
+    queryKey: ['jobTargets', selectedJob?.id],
+    queryFn: () => selectedJob ? apiService.getEmailJobTargets(selectedJob.id) : Promise.resolve([]),
+    enabled: !!selectedJob,
+  });
 
   const statusOptions = [
     { value: "all", label: "All Jobs" },
@@ -86,11 +58,11 @@ export default function JobMonitor() {
     { value: "failed", label: "Failed" },
   ];
 
-  const filteredJobs = mockJobs.filter(job => {
+  // Filter jobs by search term (status filtering is handled by the API)
+  const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const formatDate = (dateString: string) => {
@@ -108,12 +80,57 @@ export default function JobMonitor() {
     return date.toLocaleDateString();
   };
 
-  const getProgress = (job: typeof mockJobs[0]) => {
+  const getProgress = (job: EmailJob) => {
     if (job.status === 'completed') return 100;
     if (job.status === 'failed') return 0;
     if (job.recipientCount === 0) return 0;
     return Math.round((job.processedCount / job.recipientCount) * 100);
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Email Job Monitor</h1>
+            <p className="text-muted-foreground">Track and manage your email jobs</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <div className="flex items-center justify-center">
+              <RefreshCw className="h-8 w-8 animate-spin mr-2" />
+              <span>Loading jobs...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Email Job Monitor</h1>
+            <p className="text-muted-foreground">Track and manage your email jobs</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <div className="text-red-500 mb-4">
+              <h3 className="text-lg font-medium mb-2">Error Loading Jobs</h3>
+              <p className="text-muted-foreground">
+                {error instanceof Error ? error.message : 'Failed to load jobs'}
+              </p>
+            </div>
+            <Button onClick={() => refetch()}>Try Again</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -123,7 +140,7 @@ export default function JobMonitor() {
           <h1 className="text-3xl font-bold">Email Job Monitor</h1>
           <p className="text-muted-foreground">Track and manage your email jobs</p>
         </div>
-        <Button size="sm" variant="outline">
+        <Button size="sm" variant="outline" onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -148,7 +165,10 @@ export default function JobMonitor() {
                   key={option.value}
                   variant={statusFilter === option.value ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setStatusFilter(option.value)}
+                  onClick={() => {
+                    setStatusFilter(option.value);
+                    setPage(1); // Reset to first page when filter changes
+                  }}
                 >
                   {option.label}
                 </Button>
@@ -286,9 +306,73 @@ export default function JobMonitor() {
                               </div>
                             </TabsContent>
                             <TabsContent value="recipients">
-                              <div className="text-center py-8 text-muted-foreground">
-                                Recipient details would be loaded here from the API
-                              </div>
+                              {targetsLoading ? (
+                                <div className="text-center py-8">
+                                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                                  <p className="text-muted-foreground">Loading recipients...</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="font-medium">Email Recipients ({jobTargets?.length || 0})</h4>
+                                  </div>
+                                  <div className="border rounded-lg">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Email</TableHead>
+                                          <TableHead>Status</TableHead>
+                                          <TableHead>Provider</TableHead>
+                                          <TableHead>Sent At</TableHead>
+                                          <TableHead>Retries</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {jobTargets?.map((target) => (
+                                          <TableRow key={target.id}>
+                                            <TableCell className="font-medium">{target.email}</TableCell>
+                                            <TableCell>
+                                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                                target.status === 'sent' 
+                                                  ? 'bg-green-100 text-green-800' 
+                                                  : target.status === 'failed' || target.status === 'blocked'
+                                                  ? 'bg-red-100 text-red-800'
+                                                  : 'bg-yellow-100 text-yellow-800'
+                                              }`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                                                  target.status === 'sent' 
+                                                    ? 'bg-green-500' 
+                                                    : target.status === 'failed' || target.status === 'blocked'
+                                                    ? 'bg-red-500'
+                                                    : 'bg-yellow-500'
+                                                }`} />
+                                                {target.status}
+                                              </div>
+                                            </TableCell>
+                                            <TableCell>
+                                              {target.providerId || '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                              {target.sentAt 
+                                                ? new Date(target.sentAt).toLocaleString()
+                                                : '-'
+                                              }
+                                            </TableCell>
+                                            <TableCell>
+                                              {target.retryCount > 0 ? target.retryCount : '-'}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                    {(!jobTargets || jobTargets.length === 0) && (
+                                      <div className="text-center py-8 text-muted-foreground">
+                                        No recipients found for this job.
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </TabsContent>
                             <TabsContent value="timeline">
                               <div className="text-center py-8 text-muted-foreground">
@@ -305,12 +389,42 @@ export default function JobMonitor() {
             </TableBody>
           </Table>
 
-          {filteredJobs.length === 0 && (
+          {filteredJobs.length === 0 && !isLoading && (
             <div className="text-center py-8 text-muted-foreground">
               No jobs found matching your criteria.
             </div>
           )}
         </CardContent>
+        
+        {/* Pagination */}
+        {totalJobs > limit && (
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              Showing {Math.min((page - 1) * limit + 1, totalJobs)} to {Math.min(page * limit, totalJobs)} of {totalJobs} jobs
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm">
+                Page {page} of {Math.ceil(totalJobs / limit)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => p + 1)}
+                disabled={page >= Math.ceil(totalJobs / limit)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
