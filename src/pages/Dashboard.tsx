@@ -1,36 +1,111 @@
 
-import { useQuery } from "@tanstack/react-query";
-import { apiService } from "@/services/api";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Mail, Send, Shield, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 
+// Fake data
+const mockStats = {
+  totalJobs: 1247,
+  totalEmails: 45623,
+  suppressedEmails: 342,
+  activeProviders: 3,
+  jobStatusBreakdown: {
+    pending: 23,
+    processing: 5,
+    completed: 1198,
+    failed: 21,
+  },
+  emailStatusBreakdown: {
+    pending: 156,
+    sent: 44890,
+    failed: 235,
+    blocked: 342,
+  },
+  todayActivity: {
+    sent: 2847,
+    failed: 23,
+    total: 2870,
+    successRate: 99.2,
+  },
+};
+
+const mockProviders = [
+  {
+    id: "1",
+    name: "SendGrid",
+    status: "online" as const,
+    enabled: true,
+    quotaUsed: 8420,
+    quotaTotal: 10000,
+    emailsSentToday: 1847,
+    successRate: 99.5,
+    lastActivity: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "2",
+    name: "AWS SES",
+    status: "online" as const,
+    enabled: true,
+    quotaUsed: 1250,
+    quotaTotal: 5000,
+    emailsSentToday: 892,
+    successRate: 98.8,
+    lastActivity: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "3",
+    name: "Mailgun",
+    status: "offline" as const,
+    enabled: false,
+    quotaUsed: 0,
+    quotaTotal: 2000,
+    emailsSentToday: 0,
+    successRate: 97.2,
+    lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const mockRecentJobs = [
+  {
+    id: "job_abc123def456",
+    subject: "Weekly Newsletter - Tech Updates",
+    status: "completed" as const,
+    recipientCount: 1523,
+    processedCount: 1523,
+    successCount: 1510,
+    failedCount: 13,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    completedAt: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "job_xyz789ghi012",
+    subject: "Product Launch Announcement",
+    status: "processing" as const,
+    recipientCount: 892,
+    processedCount: 654,
+    successCount: 642,
+    failedCount: 12,
+    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "job_mno345pqr678",
+    subject: "Monthly Report - Q1 2024",
+    status: "pending" as const,
+    recipientCount: 245,
+    processedCount: 0,
+    successCount: 0,
+    failedCount: 0,
+    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  },
+];
+
 export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
-
-  const { data: stats, isLoading, refetch } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: apiService.getDashboardStats,
-    refetchInterval: autoRefresh ? 30000 : false,
-  });
-
-  const { data: providers } = useQuery({
-    queryKey: ['providers'],
-    queryFn: apiService.getProviders,
-    refetchInterval: autoRefresh ? 60000 : false,
-  });
-
-  const { data: recentJobs } = useQuery({
-    queryKey: ['recent-jobs'],
-    queryFn: () => apiService.getEmailJobs(1, 10),
-    refetchInterval: autoRefresh ? 30000 : false,
-  });
 
   useEffect(() => {
     if (autoRefresh) {
@@ -40,28 +115,6 @@ export default function Dashboard() {
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Email Dispatch Dashboard</h1>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-2">
-                  <div className="h-4 bg-muted rounded w-1/2"></div>
-                  <div className="h-8 bg-muted rounded w-3/4"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -81,7 +134,7 @@ export default function Dashboard() {
           >
             Auto-refresh: {autoRefresh ? 'ON' : 'OFF'}
           </Button>
-          <Button size="sm" onClick={() => refetch()}>
+          <Button size="sm" onClick={() => setLastUpdated(new Date())}>
             Refresh
           </Button>
         </div>
@@ -91,25 +144,25 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Jobs"
-          value={stats?.totalJobs || 0}
+          value={mockStats.totalJobs}
           subtitle="Email Jobs Created"
           icon={<Mail className="h-4 w-4" />}
         />
         <StatCard
           title="Total Emails"
-          value={stats?.totalEmails || 0}
+          value={mockStats.totalEmails}
           subtitle="Individual Emails Sent"
           icon={<Send className="h-4 w-4" />}
         />
         <StatCard
           title="Suppressed Emails"
-          value={stats?.suppressedEmails || 0}
+          value={mockStats.suppressedEmails}
           subtitle="Blocked/Suppressed"
           icon={<Shield className="h-4 w-4" />}
         />
         <StatCard
           title="Active Providers"
-          value={stats?.activeProviders || 0}
+          value={mockStats.activeProviders}
           subtitle="Email Providers Online"
           icon={<Settings className="h-4 w-4" />}
         />
@@ -122,7 +175,7 @@ export default function Dashboard() {
             <CardTitle>Job Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {stats?.jobStatusBreakdown && Object.entries(stats.jobStatusBreakdown).map(([status, count]) => (
+            {Object.entries(mockStats.jobStatusBreakdown).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <StatusBadge status={status} />
@@ -139,7 +192,7 @@ export default function Dashboard() {
             <CardTitle>Email Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {stats?.emailStatusBreakdown && Object.entries(stats.emailStatusBreakdown).map(([status, count]) => (
+            {Object.entries(mockStats.emailStatusBreakdown).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <StatusBadge status={status} />
@@ -161,20 +214,20 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Sent</p>
-              <p className="text-2xl font-bold text-green-600">{stats?.todayActivity?.sent || 0}</p>
+              <p className="text-2xl font-bold text-green-600">{mockStats.todayActivity.sent}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Failed</p>
-              <p className="text-2xl font-bold text-red-600">{stats?.todayActivity?.failed || 0}</p>
+              <p className="text-2xl font-bold text-red-600">{mockStats.todayActivity.failed}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-2xl font-bold">{stats?.todayActivity?.total || 0}</p>
+              <p className="text-2xl font-bold">{mockStats.todayActivity.total}</p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Success Rate</p>
-              <Progress value={stats?.todayActivity?.successRate || 0} className="h-2" />
-              <p className="text-sm font-medium">{stats?.todayActivity?.successRate || 0}%</p>
+              <Progress value={mockStats.todayActivity.successRate} className="h-2" />
+              <p className="text-sm font-medium">{mockStats.todayActivity.successRate}%</p>
             </div>
           </div>
         </CardContent>
@@ -187,7 +240,7 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {providers?.map((provider) => (
+            {mockProviders.map((provider) => (
               <Card key={provider.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -222,7 +275,7 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {recentJobs?.jobs?.map((job) => (
+            {mockRecentJobs.map((job) => (
               <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">

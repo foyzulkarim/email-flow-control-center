@@ -1,5 +1,5 @@
 
-import { Home, Send, List, Settings, Chart, Shield, Mail } from "lucide-react";
+import { Home, Send, List, Settings, BarChart3, Shield, Mail } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
@@ -37,7 +37,7 @@ const navigation = [
   {
     title: "Analytics",
     url: "/analytics",
-    icon: Chart,
+    icon: BarChart3,
   },
   {
     title: "Suppression",

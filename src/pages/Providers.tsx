@@ -1,13 +1,10 @@
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiService } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useToast } from "@/hooks/use-toast";
 import { Settings, RefreshCw, AlertTriangle } from "lucide-react";
 import {
   AlertDialog,
@@ -21,52 +18,68 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Mock data
+const mockProviders = [
+  {
+    id: "1",
+    name: "SendGrid",
+    status: "online" as const,
+    enabled: true,
+    quotaUsed: 8420,
+    quotaTotal: 10000,
+    emailsSentToday: 1847,
+    successRate: 99.5,
+    lastActivity: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "2",
+    name: "AWS SES",
+    status: "online" as const,
+    enabled: true,
+    quotaUsed: 1250,
+    quotaTotal: 5000,
+    emailsSentToday: 892,
+    successRate: 98.8,
+    lastActivity: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "3",
+    name: "Mailgun",
+    status: "offline" as const,
+    enabled: false,
+    quotaUsed: 0,
+    quotaTotal: 2000,
+    emailsSentToday: 0,
+    successRate: 97.2,
+    lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "4",
+    name: "Postmark",
+    status: "online" as const,
+    enabled: true,
+    quotaUsed: 1850,
+    quotaTotal: 2000,
+    emailsSentToday: 324,
+    successRate: 99.1,
+    lastActivity: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+  },
+];
+
 export default function Providers() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [providers, setProviders] = useState(mockProviders);
 
-  const { data: providers, isLoading, refetch } = useQuery({
-    queryKey: ['providers'],
-    queryFn: apiService.getProviders,
-    refetchInterval: 60000, // Refetch every minute
-  });
+  const toggleProvider = (id: string, enabled: boolean) => {
+    setProviders(prev => prev.map(p => 
+      p.id === id ? { ...p, enabled } : p
+    ));
+  };
 
-  const toggleProviderMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      apiService.updateProviderStatus(id, enabled),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
-      toast({
-        title: "Provider Updated",
-        description: "Provider status has been updated successfully.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Update Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const resetQuotaMutation = useMutation({
-    mutationFn: (id: string) => apiService.resetProviderQuota(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
-      toast({
-        title: "Quota Reset",
-        description: "Provider quota has been reset successfully.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Reset Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const resetQuota = (id: string) => {
+    setProviders(prev => prev.map(p => 
+      p.id === id ? { ...p, quotaUsed: 0 } : p
+    ));
+  };
 
   const getQuotaUsageColor = (percentage: number) => {
     if (percentage >= 90) return "bg-red-500";
@@ -75,36 +88,12 @@ export default function Providers() {
   };
 
   const getProviderIcon = (name: string) => {
-    // You could add actual provider logos here
     return <Settings className="h-8 w-8 text-muted-foreground" />;
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Email Provider Management</h1>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="h-8 bg-muted rounded w-1/2"></div>
-                  <div className="h-4 bg-muted rounded"></div>
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const totalQuotaUsed = providers?.reduce((sum, p) => sum + p.quotaUsed, 0) || 0;
-  const totalQuotaLimit = providers?.reduce((sum, p) => sum + p.quotaTotal, 0) || 0;
-  const averageSuccessRate = providers?.length 
+  const totalQuotaUsed = providers.reduce((sum, p) => sum + p.quotaUsed, 0);
+  const totalQuotaLimit = providers.reduce((sum, p) => sum + p.quotaTotal, 0);
+  const averageSuccessRate = providers.length 
     ? Math.round(providers.reduce((sum, p) => sum + p.successRate, 0) / providers.length)
     : 0;
 
@@ -116,7 +105,7 @@ export default function Providers() {
           <h1 className="text-3xl font-bold">Email Provider Management</h1>
           <p className="text-muted-foreground">Manage your email service providers</p>
         </div>
-        <Button onClick={() => refetch()} size="sm" variant="outline">
+        <Button size="sm" variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -149,9 +138,9 @@ export default function Providers() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Providers</p>
                 <p className="text-2xl font-bold">
-                  {providers?.filter(p => p.enabled && p.status === 'online').length || 0}
+                  {providers.filter(p => p.enabled && p.status === 'online').length}
                 </p>
-                <p className="text-sm text-muted-foreground">of {providers?.length || 0} total</p>
+                <p className="text-sm text-muted-foreground">of {providers.length} total</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
                 <div className="h-3 w-3 rounded-full bg-green-500"></div>
@@ -178,7 +167,7 @@ export default function Providers() {
 
       {/* Provider Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {providers?.map((provider) => {
+        {providers.map((provider) => {
           const quotaPercentage = (provider.quotaUsed / provider.quotaTotal) * 100;
           const isQuotaWarning = quotaPercentage >= 80;
 
@@ -200,10 +189,7 @@ export default function Providers() {
                   </div>
                   <Switch
                     checked={provider.enabled}
-                    onCheckedChange={(enabled) =>
-                      toggleProviderMutation.mutate({ id: provider.id, enabled })
-                    }
-                    disabled={toggleProviderMutation.isPending}
+                    onCheckedChange={(enabled) => toggleProvider(provider.id, enabled)}
                   />
                 </div>
               </CardHeader>
@@ -255,11 +241,7 @@ export default function Providers() {
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        disabled={resetQuotaMutation.isPending}
-                      >
+                      <Button variant="outline" size="sm">
                         Reset Quota
                       </Button>
                     </AlertDialogTrigger>
@@ -274,7 +256,7 @@ export default function Providers() {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => resetQuotaMutation.mutate(provider.id)}
+                          onClick={() => resetQuota(provider.id)}
                         >
                           Reset
                         </AlertDialogAction>
@@ -288,7 +270,7 @@ export default function Providers() {
         })}
       </div>
 
-      {providers?.length === 0 && (
+      {providers.length === 0 && (
         <Card>
           <CardContent className="p-12 text-center">
             <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

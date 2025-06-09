@@ -1,11 +1,8 @@
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiService } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -25,19 +22,61 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, RefreshCw, Eye } from "lucide-react";
-import { EmailJob } from "@/types/api";
+
+// Mock data
+const mockJobs = [
+  {
+    id: "job_abc123def456",
+    subject: "Weekly Newsletter - Tech Updates",
+    status: "completed" as const,
+    recipientCount: 1523,
+    processedCount: 1523,
+    successCount: 1510,
+    failedCount: 13,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    completedAt: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
+    metadata: { campaign: "newsletter", segment: "tech" },
+  },
+  {
+    id: "job_xyz789ghi012",
+    subject: "Product Launch Announcement",
+    status: "processing" as const,
+    recipientCount: 892,
+    processedCount: 654,
+    successCount: 642,
+    failedCount: 12,
+    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    metadata: { campaign: "product_launch", priority: "high" },
+  },
+  {
+    id: "job_mno345pqr678",
+    subject: "Monthly Report - Q1 2024",
+    status: "pending" as const,
+    recipientCount: 245,
+    processedCount: 0,
+    successCount: 0,
+    failedCount: 0,
+    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    metadata: { campaign: "reports", department: "finance" },
+  },
+  {
+    id: "job_def456ghi789",
+    subject: "Security Alert - Password Reset",
+    status: "failed" as const,
+    recipientCount: 156,
+    processedCount: 156,
+    successCount: 0,
+    failedCount: 156,
+    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    completedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    metadata: { campaign: "security", urgent: "true" },
+  },
+];
 
 export default function JobMonitor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedJob, setSelectedJob] = useState<EmailJob | null>(null);
-  const [page, setPage] = useState(1);
-
-  const { data: jobsData, isLoading, refetch } = useQuery({
-    queryKey: ['email-jobs', page, statusFilter === 'all' ? undefined : statusFilter],
-    queryFn: () => apiService.getEmailJobs(page, 20, statusFilter === 'all' ? undefined : statusFilter),
-    refetchInterval: 10000, // Refetch every 10 seconds for active jobs
-  });
+  const [selectedJob, setSelectedJob] = useState<typeof mockJobs[0] | null>(null);
 
   const statusOptions = [
     { value: "all", label: "All Jobs" },
@@ -47,10 +86,12 @@ export default function JobMonitor() {
     { value: "failed", label: "Failed" },
   ];
 
-  const filteredJobs = jobsData?.jobs?.filter(job => 
-    job.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.id.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredJobs = mockJobs.filter(job => {
+    const matchesSearch = job.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -67,31 +108,12 @@ export default function JobMonitor() {
     return date.toLocaleDateString();
   };
 
-  const getProgress = (job: EmailJob) => {
+  const getProgress = (job: typeof mockJobs[0]) => {
     if (job.status === 'completed') return 100;
     if (job.status === 'failed') return 0;
     if (job.recipientCount === 0) return 0;
     return Math.round((job.processedCount / job.recipientCount) * 100);
   };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Email Job Monitor</h1>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-12 bg-muted rounded"></div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -101,7 +123,7 @@ export default function JobMonitor() {
           <h1 className="text-3xl font-bold">Email Job Monitor</h1>
           <p className="text-muted-foreground">Track and manage your email jobs</p>
         </div>
-        <Button onClick={() => refetch()} size="sm" variant="outline">
+        <Button size="sm" variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -139,7 +161,7 @@ export default function JobMonitor() {
       {/* Jobs Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Jobs ({jobsData?.total || 0})</CardTitle>
+          <CardTitle>Jobs ({filteredJobs.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -286,31 +308,6 @@ export default function JobMonitor() {
           {filteredJobs.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               No jobs found matching your criteria.
-            </div>
-          )}
-
-          {/* Pagination */}
-          {jobsData && jobsData.total > 20 && (
-            <div className="flex justify-center gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1}
-              >
-                Previous
-              </Button>
-              <span className="py-2 px-3 text-sm">
-                Page {page} of {Math.ceil(jobsData.total / 20)}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page + 1)}
-                disabled={page * 20 >= jobsData.total}
-              >
-                Next
-              </Button>
             </div>
           )}
         </CardContent>

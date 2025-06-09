@@ -1,7 +1,5 @@
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiService } from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,68 +39,86 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Download, Upload, Trash2 } from "lucide-react";
+import { Plus, Search, Send, Trash2 } from "lucide-react";
+
+// Mock data
+const mockSuppressionEntries = [
+  {
+    id: "1",
+    email: "bounced@example.com",
+    reason: "bounce" as const,
+    dateAdded: "2024-01-15",
+    source: "automatic",
+    notes: "Hard bounce - invalid email address",
+  },
+  {
+    id: "2", 
+    email: "complaint@example.com",
+    reason: "complaint" as const,
+    dateAdded: "2024-01-14",
+    source: "feedback_loop",
+    notes: "User marked as spam",
+  },
+  {
+    id: "3",
+    email: "unsubscribed@example.com",
+    reason: "unsubscribe" as const,
+    dateAdded: "2024-01-13",
+    source: "user_request",
+    notes: "Unsubscribed via email link",
+  },
+  {
+    id: "4",
+    email: "manual@example.com",
+    reason: "manual" as const,
+    dateAdded: "2024-01-12",
+    source: "admin",
+    notes: "Added manually by support team",
+  },
+  {
+    id: "5",
+    email: "another.bounce@test.com",
+    reason: "bounce" as const,
+    dateAdded: "2024-01-11",
+    source: "automatic",
+    notes: "Mailbox full",
+  },
+];
 
 export default function Suppression() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [page, setPage] = useState(1);
   const [newEmail, setNewEmail] = useState("");
   const [newReason, setNewReason] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [entries, setEntries] = useState(mockSuppressionEntries);
 
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const addEntry = () => {
+    if (!validateEmail(newEmail) || !newReason) return;
+    
+    const newEntry = {
+      id: String(entries.length + 1),
+      email: newEmail,
+      reason: newReason as "bounce" | "complaint" | "manual" | "unsubscribe",
+      dateAdded: new Date().toISOString().split('T')[0],
+      source: "manual",
+      notes: newNotes || undefined,
+    };
+    
+    setEntries(prev => [newEntry, ...prev]);
+    setNewEmail("");
+    setNewReason("");
+    setNewNotes("");
+    setIsAddDialogOpen(false);
+  };
 
-  const { data: suppressionData, isLoading } = useQuery({
-    queryKey: ['suppression-list', page],
-    queryFn: () => apiService.getSuppressionList(page, 50),
-  });
+  const removeEntry = (id: string) => {
+    setEntries(prev => prev.filter(e => e.id !== id));
+  };
 
-  const addMutation = useMutation({
-    mutationFn: () => apiService.addSuppressionEntry(newEmail, newReason, newNotes),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppression-list'] });
-      setNewEmail("");
-      setNewReason("");
-      setNewNotes("");
-      setIsAddDialogOpen(false);
-      toast({
-        title: "Email Added",
-        description: "Email has been added to the suppression list.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Add Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (id: string) => apiService.removeSuppressionEntry(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppression-list'] });
-      toast({
-        title: "Email Removed",
-        description: "Email has been removed from the suppression list.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Remove Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const filteredEntries = suppressionData?.entries?.filter(entry =>
+  const filteredEntries = entries.filter(entry =>
     entry.email.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  );
 
   const reasonOptions = [
     { value: "bounce", label: "Bounce" },
@@ -135,25 +151,6 @@ export default function Suppression() {
     return validateEmail(newEmail) && newReason.length > 0;
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Suppression List Management</h1>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-12 bg-muted rounded"></div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -164,11 +161,11 @@ export default function Suppression() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">
-            <Upload className="h-4 w-4 mr-2" />
+            <Send className="h-4 w-4 mr-2" />
             Import CSV
           </Button>
           <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
+            <Send className="h-4 w-4 mr-2" />
             Export List
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -227,11 +224,11 @@ export default function Suppression() {
 
                 <div className="flex gap-2 pt-4">
                   <Button
-                    onClick={() => addMutation.mutate()}
-                    disabled={!isFormValid() || addMutation.isPending}
+                    onClick={addEntry}
+                    disabled={!isFormValid()}
                     className="flex-1"
                   >
-                    {addMutation.isPending ? "Adding..." : "Add Email"}
+                    Add Email
                   </Button>
                   <Button
                     variant="outline"
@@ -265,7 +262,7 @@ export default function Suppression() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Suppressed Emails ({suppressionData?.total || 0})
+            Suppressed Emails ({filteredEntries.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -322,7 +319,7 @@ export default function Suppression() {
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => removeMutation.mutate(entry.id)}
+                            onClick={() => removeEntry(entry.id)}
                             className="bg-red-600 hover:bg-red-700"
                           >
                             Remove
@@ -341,31 +338,6 @@ export default function Suppression() {
               {searchTerm ? "No emails found matching your search." : "No suppressed emails found."}
             </div>
           )}
-
-          {/* Pagination */}
-          {suppressionData && suppressionData.total > 50 && (
-            <div className="flex justify-center gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page - 1)}
-                disabled={page === 1}
-              >
-                Previous
-              </Button>
-              <span className="py-2 px-3 text-sm">
-                Page {page} of {Math.ceil(suppressionData.total / 50)}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page + 1)}
-                disabled={page * 50 >= suppressionData.total}
-              >
-                Next
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -377,7 +349,7 @@ export default function Suppression() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
             {reasonOptions.map((reason) => {
-              const count = suppressionData?.entries?.filter(entry => entry.reason === reason.value).length || 0;
+              const count = entries.filter(entry => entry.reason === reason.value).length;
               return (
                 <div key={reason.value} className="text-center p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">{reason.label}</p>
